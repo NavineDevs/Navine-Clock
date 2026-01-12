@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Navine Clock</title>
+<style>
+:root{
+--black:#03050b;
+--royal:#1f3cff;
+--electric:#3bdcff;
+--panel:#0b1433;
+--panel2:#0e1c4a;
+--text:#eaf0ff;
+--muted:#8fa8ff;
+--border:#2b42cc;
+--radius:16px;
+--mono:ui-monospace,Consolas,monospace
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui;background:linear-gradient(180deg,var(--black),#02040a);color:var(--text);min-height:100vh}
+header{display:flex;justify-content:space-between;align-items:center;padding:16px;border-bottom:1px solid var(--border)}
+h1{margin:0;color:var(--electric)}
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+.tab{padding:10px 14px;border-radius:999px;border:1px solid var(--border);background:var(--panel);color:var(--muted);cursor:pointer;font-weight:700}
+.tab.active{background:linear-gradient(90deg,var(--royal),var(--electric));color:#fff}
+main{padding:16px}
+.panel{display:none;background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.panel.active{display:block}
+.big{font-family:var(--mono);font-size:42px;color:var(--electric)}
+.display{font-family:var(--mono);font-size:34px;margin:12px 0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+input,select,button{background:#02061a;border:1px solid var(--border);color:var(--text);border-radius:12px;padding:10px}
+button{cursor:pointer;font-weight:700}
+button.primary{background:linear-gradient(90deg,var(--royal),var(--electric));border:none}
+.list{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.item{background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:10px;display:flex;justify-content:space-between;align-items:center}
+.weekdays button{padding:6px 8px;font-size:12px}
+.weekdays .active{background:var(--electric);color:#000}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;z-index:1000}
+.modal.show{display:flex}
+.box{background:var(--panel2);border:1px solid var(--border);border-radius:16px;padding:18px;width:360px;max-width:90vw}
+.item-controls{display:flex;gap:8px}
+.delete-btn{background:#ff3b3b;border:none;padding:6px 12px;font-size:12px;border-radius:8px}
+.toggle-btn{padding:6px 12px;font-size:12px;border-radius:8px}
+.toggle-btn.active{background:var(--electric);color:#000}
+.toggle-btn.inactive{background:#666;color:#ccc}
+.alarm-disabled{opacity:0.6}
+.timezone-item{display:flex;justify-content:space-between;align-items:center}
+.timezone-item span{font-family:var(--mono)}
+.date-display{color:var(--muted);font-size:16px;margin-top:4px}
+.timezone-time{font-size:18px;margin-bottom:4px}
+.timezone-date{font-size:14px;color:var(--muted)}
+.timezone-info{display:flex;flex-direction:column}
+</style>
+</head>
+<body>
+
+<header>
+<h1>Navine Clock</h1>
+<div class="tabs">
+<div class="tab active" data-tab="clock">World Clock</div>
+<div class="tab" data-tab="alarms">Alarms</div>
+<div class="tab" data-tab="stopwatch">Stopwatch</div>
+<div class="tab" data-tab="timer">Timer</div>
+<div class="tab" data-tab="settings">Settings</div>
+</div>
+</header>
+
+<main>
+
+<section class="panel active" id="clock">
+<div class="big" id="localTime"></div>
+<div id="localDate" class="date-display"></div>
+<div class="row">
+<input id="tzSearch" placeholder="Search time zone">
+<select id="tzSelect"></select>
+<input id="tzLabel" placeholder="Label">
+<button class="primary" id="addTz">Add</button>
+</div>
+<div class="list" id="tzList"></div>
+</section>
+
+<section class="panel" id="alarms">
+<div class="row">
+<select id="aHour"></select>
+<select id="aMinute"></select>
+<select id="aPeriod"><option>AM</option><option>PM</option></select>
+<input id="aLabel" placeholder="Label">
+</div>
+<div class="row weekdays" id="weekdayPicker"></div>
+<button class="primary" id="addAlarm">Add Alarm</button>
+<div class="list" id="alarmList"></div>
+</section>
+
+<section class="panel" id="stopwatch">
+<div class="display" id="swDisplay">00:00:00.00</div>
+<div class="row">
+<button class="primary" id="swStart">Start</button>
+<button id="swLap">Lap</button>
+<button id="swPause">Pause</button>
+<button id="swReset">Reset</button>
+</div>
+<div class="list" id="swLaps"></div>
+</section>
+
+<section class="panel" id="timer">
+<div class="row">
+<input type="number" id="th" placeholder="H" min="0" value="0">
+<input type="number" id="tm" placeholder="M" min="0" max="59" value="0">
+<input type="number" id="ts" placeholder="S" min="0" max="59" value="0">
+</div>
+<div class="display" id="timerDisplay">00:00:00</div>
+<div class="row">
+<button class="primary" id="tStart">Start</button>
+<button id="tReset">Reset</button>
+</div>
+</section>
+
+<section class="panel" id="settings">
+<div class="row">
+<label style="margin-right:10px;">Time Format:</label>
+<select id="timeFormat">
+<option value="12">12-Hour</option>
+<option value="24">24-Hour</option>
+</select>
+</div>
+<select id="soundSelect"></select>
+<div class="row">
+<button id="preview">▶ Preview</button>
+<input type="file" id="audioFile" accept="audio/*">
+<input type="url" id="audioUrl" placeholder="Custom URL">
+<button id="useUrl">Use URL</button>
+</div>
+</section>
+
+</main>
+
+<div class="modal" id="alertModal">
+<div class="box">
+<div class="big">Alert</div>
+<p id="alertMessage">Alarm is ringing!</p>
+<div class="row">
+<button id="snooze">Snooze 5m</button>
+<button class="primary" id="stopAlert">Stop</button>
+</div>
+</div>
+</div>
+
+<audio id="alarmAudio" loop></audio>
+
+<script>
+const $ = i => document.getElementById(i)
+const pad = n => String(n).padStart(2, "0")
+
+// Tab switching
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+    document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"))
+    document.querySelectorAll(".panel").forEach(x => x.classList.remove("active"))
+    t.classList.add("active")
+    $(t.dataset.tab).classList.add("active")
+})
+
+// Time format settings - FIXED
+let timeFormat = localStorage.getItem("timeFormat") || "12"
+const formatSel = $("timeFormat")
+formatSel.value = timeFormat
+
+// Update the format and trigger refresh
+formatSel.onchange = function(e) {
+    timeFormat = e.target.value
+    localStorage.setItem("timeFormat", timeFormat)
+    // Force refresh all time displays
+    tick()
+    updateAllTimezones()
+    renderAlarms() // Refresh alarm displays with new format
+}
+
+// Format time based on 12/24 hour setting
+function formatTime(hours, minutes, seconds = null) {
+    if (timeFormat === "24") {
+        return seconds !== null 
+            ? `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`
+            : `${pad(hours)}:${pad(minutes)}`
+    } else {
+        const period = hours >= 12 ? "PM" : "AM"
+        const displayHours = hours % 12 || 12
+        return seconds !== null
+            ? `${displayHours}:${pad(minutes)}:${pad(seconds)} ${period}`
+            : `${displayHours}:${pad(minutes)} ${period}`
+    }
+}
+
+// Format date as "Jan Sun 26 | 1/11/26"
+function formatDate(date) {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    
+    const month = months[date.getMonth()]
+    const weekday = days[date.getDay()]
+    const day = date.getDate()
+    const year = date.getFullYear().toString().slice(-2)
+    
+    // Format: Jan Sun 26 | 1/11/26
+    const monthNum = date.getMonth() + 1
+    const dayNum = date.getDate()
+    
+    return `${month} ${weekday} ${day} | ${monthNum}/${dayNum}/${year}`
+}
+
+// Update all clocks
+function tick() {
+    const d = new Date()
+    
+    // Update local time with proper format
+    $("localTime").textContent = timeFormat === "12" 
+        ? d.toLocaleTimeString('en-US', {hour12: true})
+        : d.toLocaleTimeString('en-US', {hour12: false})
+    
+    // Update local date
+    $("localDate").textContent = formatDate(d)
+}
+
+// Initialize and update regularly
+setInterval(tick, 1000)
+tick()
+
+// Update timezone displays
+function updateTimezoneDisplay(element, timezone) {
+    try {
+        const now = new Date()
+        const tzDate = new Date(now.toLocaleString("en-US", {timeZone: timezone}))
+        
+        const hours = tzDate.getHours()
+        const minutes = tzDate.getMinutes()
+        const seconds = tzDate.getSeconds()
+        
+        const timeStr = formatTime(hours, minutes, seconds)
+        const dateStr = formatDate(tzDate)
+        
+        element.querySelector('.timezone-time').textContent = timeStr
+        element.querySelector('.timezone-date').textContent = dateStr
+    } catch (e) {
+        console.error("Error updating timezone:", e)
+    }
+}
+
+function updateAllTimezones() {
+    document.querySelectorAll('.timezone-item').forEach(item => {
+        const timezone = item.dataset.timezone
+        updateTimezoneDisplay(item, timezone)
+    })
+}
+
+// World Clock functionality
+const zones = Intl.supportedValuesOf ? Intl.supportedValuesOf("timeZone") : []
+function renderTZ(f = "") {
+    $("tzSelect").innerHTML = ""
+    zones.filter(z => z.toLowerCase().includes(f.toLowerCase())).forEach(z => {
+        const o = document.createElement("option")
+        o.value = z
+        o.textContent = z
+        $("tzSelect").appendChild(o)
+    })
+}
+renderTZ()
+$("tzSearch").oninput = e => renderTZ(e.target.value)
+
+let tzs = JSON.parse(localStorage.getItem("timezones") || "[]")
+
+function saveTimezones() {
+    localStorage.setItem("timezones", JSON.stringify(tzs))
+}
+
+function renderTimezones() {
+    $("tzList").innerHTML = ""
+    
+    if (tzs.length === 0) {
+        const emptyMsg = document.createElement("div")
+        emptyMsg.className = "item"
+        emptyMsg.textContent = "No time zones added yet. Search and add one above."
+        $("tzList").appendChild(emptyMsg)
+        return
+    }
+    
+    tzs.forEach((t, index) => {
+        const d = document.createElement("div")
+        d.className = "item timezone-item"
+        d.dataset.timezone = t.z
+        
+        const infoDiv = document.createElement("div")
+        infoDiv.className = "timezone-info"
+        
+        const labelDiv = document.createElement("div")
+        labelDiv.textContent = t.l || t.z
+        
+        const timeDiv = document.createElement("div")
+        timeDiv.className = "timezone-time"
+        
+        const dateDiv = document.createElement("div")
+        dateDiv.className = "timezone-date"
+        
+        infoDiv.appendChild(labelDiv)
+        infoDiv.appendChild(timeDiv)
+        infoDiv.appendChild(dateDiv)
+        
+        const controlsDiv = document.createElement("div")
+        controlsDiv.className = "item-controls"
+        
+        const deleteBtn = document.createElement("button")
+        deleteBtn.textContent = "Delete"
+        deleteBtn.className = "delete-btn"
+        deleteBtn.onclick = (e) => {
+            e.stopPropagation()
+            tzs.splice(index, 1)
+            saveTimezones()
+            renderTimezones()
+        }
+        
+        controlsDiv.appendChild(deleteBtn)
+        
+        d.appendChild(infoDiv)
+        d.appendChild(controlsDiv)
+        $("tzList").appendChild(d)
+        
+        // Initial update of the display
+        updateTimezoneDisplay(d, t.z)
+    })
+}
+
+// Update timezone displays every second
+setInterval(updateAllTimezones, 1000)
+
+$("addTz").onclick = () => {
+    const tzValue = $("tzSelect").value
+    const label = $("tzLabel").value.trim()
+    
+    if (tzValue) {
+        tzs.push({z: tzValue, l: label || tzValue})
+        $("tzLabel").value = ""
+        saveTimezones()
+        renderTimezones()
+    }
+}
+
+renderTimezones()
+
+// Alarm functionality
+for (let i = 1; i <= 12; i++) $("aHour").innerHTML += `<option>${i}</option>`
+for (let i = 0; i < 60; i++) $("aMinute").innerHTML += `<option>${pad(i)}</option>`
+
+const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+let repeat = []
+days.forEach((d, i) => {
+    const b = document.createElement("button")
+    b.textContent = d
+    b.onclick = () => {
+        b.classList.toggle("active")
+        repeat.includes(i) ? repeat = repeat.filter(x => x != i) : repeat.push(i)
+    }
+    $("weekdayPicker").appendChild(b)
+})
+
+let alarms = JSON.parse(localStorage.getItem("alarms") || "[]")
+
+function saveAlarms() {
+    localStorage.setItem("alarms", JSON.stringify(alarms))
+}
+
+function renderAlarms() {
+    $("alarmList").innerHTML = ""
+    
+    if (alarms.length === 0) {
+        const emptyMsg = document.createElement("div")
+        emptyMsg.className = "item"
+        emptyMsg.textContent = "No alarms set. Add one above."
+        $("alarmList").appendChild(emptyMsg)
+        return
+    }
+    
+    alarms.forEach((a, index) => {
+        const d = document.createElement("div")
+        d.className = `item ${a.enabled === false ? 'alarm-disabled' : ''}`
+        
+        const infoDiv = document.createElement("div")
+        const timeStr = formatTime(a.h, a.m)
+        const label = a.l || "Alarm"
+        const repeatStr = a.r && a.r.length > 0 ? ` (${a.r.map(d => days[d][0]).join('')})` : ''
+        infoDiv.textContent = `${label} - ${timeStr}${repeatStr}`
+        
+        const controlsDiv = document.createElement("div")
+        controlsDiv.className = "item-controls"
+        
+        // Toggle button
+        const toggleBtn = document.createElement("button")
+        toggleBtn.textContent = a.enabled === false ? "Off" : "On"
+        toggleBtn.className = `toggle-btn ${a.enabled === false ? 'inactive' : 'active'}`
+        toggleBtn.onclick = (e) => {
+            e.stopPropagation()
+            alarms[index].enabled = alarms[index].enabled === false ? true : false
+            saveAlarms()
+            renderAlarms()
+        }
+        
+        // Delete button
+        const deleteBtn = document.createElement("button")
+        deleteBtn.textContent = "Delete"
+        deleteBtn.className = "delete-btn"
+        deleteBtn.onclick = (e) => {
+            e.stopPropagation()
+            alarms.splice(index, 1)
+            saveAlarms()
+            renderAlarms()
+        }
+        
+        controlsDiv.appendChild(toggleBtn)
+        controlsDiv.appendChild(deleteBtn)
+        
+        d.appendChild(infoDiv)
+        d.appendChild(controlsDiv)
+        $("alarmList").appendChild(d)
+    })
+}
+renderAlarms()
+
+$("addAlarm").onclick = () => {
+    let h = +$("aHour").value
+    let m = +$("aMinute").value
+    const p = $("aPeriod").value
+    const label = $("aLabel").value.trim()
+    
+    // Convert to 24-hour format for storage
+    if (p === "PM" && h < 12) h += 12
+    if (p === "AM" && h === 12) h = 0
+    
+    alarms.push({
+        h,
+        m,
+        l: label || "Alarm",
+        r: [...repeat],
+        enabled: true,
+        f: ""
+    })
+    
+    repeat = []
+    document.querySelectorAll(".weekdays button").forEach(b => b.classList.remove("active"))
+    $("aLabel").value = ""
+    
+    saveAlarms()
+    renderAlarms()
+}
+
+// Sound settings
+const base = "https://NavineDevs.github.com/Navine-Clock/"
+const sounds = [
+    "perfect_alarm.mp3",
+    "iphone_alarm.mp3", 
+    "sonic-exe-jumpscare_dWTcoBy.mp3",
+    "discord-jumpscare.mp3",
+    "alarm_1.mp3",
+    "ios_17_alarm.mp3",
+    "j_a_r_v_i_s_alarm.mp3",
+    "motivational_alarm.mp3"
+]
+
+const audio = $("alarmAudio")
+audio.src = localStorage.getItem("sound") || base + sounds[0]
+
+sounds.forEach(s => $("soundSelect").innerHTML += `<option value="${base + s}">${s}</option>`)
+$("soundSelect").value = audio.src
+$("soundSelect").onchange = e => {
+    audio.src = e.target.value
+    localStorage.setItem("sound", audio.src)
+}
+
+$("preview").onclick = () => {
+    audio.currentTime = 0
+    audio.play()
+}
+
+$("useUrl").onclick = () => {
+    const url = $("audioUrl").value.trim()
+    if (url) {
+        audio.src = url
+        localStorage.setItem("sound", audio.src)
+    }
+}
+
+$("audioFile").onchange = e => {
+    const file = e.target.files[0]
+    if (file) {
+        const r = new FileReader()
+        r.onload = () => {
+            audio.src = r.result
+            localStorage.setItem("sound", audio.src)
+        }
+        r.readAsDataURL(file)
+    }
+}
+
+// Alarm checking
+setInterval(() => {
+    const n = new Date()
+    const today = n.getDay()
+    const currentHour = n.getHours()
+    const currentMinute = n.getMinutes()
+    
+    alarms.forEach(a => {
+        if (a.enabled !== false && 
+            currentHour === a.h && 
+            currentMinute === a.m && 
+            (a.r.length === 0 || a.r.includes(today)) && 
+            a.f !== n.toDateString()) {
+            
+            a.f = n.toDateString()
+            saveAlarms()
+            
+            $("alertMessage").textContent = `${a.l || "Alarm"} - ${formatTime(a.h, a.m)}`
+            $("alertModal").classList.add("show")
+            audio.currentTime = 0
+            audio.play()
+        }
+    })
+}, 1000)
+
+// Timer functionality
+let tRemain = 0, tEnd, tInt
+
+function tf(ms) {
+    const s = Math.floor(ms / 1000)
+    return pad(Math.floor(s / 3600)) + ":" + pad(Math.floor(s / 60) % 60) + ":" + pad(s % 60)
+}
+
+$("tStart").onclick = () => {
+    if (!tRemain) {
+        tRemain = (+$("th").value * 3600 + +$("tm").value * 60 + +$("ts").value) * 1000
+    }
+    
+    if (tRemain <= 0) return
+    
+    tEnd = performance.now() + tRemain
+    clearInterval(tInt)
+    
+    tInt = setInterval(() => {
+        tRemain = Math.max(0, tEnd - performance.now())
+        $("timerDisplay").textContent = tf(tRemain)
+        
+        if (tRemain <= 0) {
+            clearInterval(tInt)
+            $("alertMessage").textContent = "Timer Finished!"
+            $("alertModal").classList.add("show")
+            audio.currentTime = 0
+            audio.play()
+        }
+    }, 100)
+}
+
+$("tReset").onclick = () => {
+    clearInterval(tInt)
+    tRemain = 0
+    $("timerDisplay").textContent = "00:00:00"
+}
+
+// Alert modal controls
+$("stopAlert").onclick = () => {
+    $("alertModal").classList.remove("show")
+    audio.pause()
+    audio.currentTime = 0
+}
+
+$("snooze").onclick = () => {
+    $("alertModal").classList.remove("show")
+    audio.pause()
+    audio.currentTime = 0
+    
+    // Set timer for 5 minutes
+    $("th").value = 0
+    $("tm").value = 5
+    $("ts").value = 0
+    tRemain = 5 * 60 * 1000
+    $("tStart").click()
+}
+
+// Stopwatch functionality
+let swRun = false, swStart = 0, swElapsed = 0, swInt
+
+function swFmt(ms) {
+    return pad(Math.floor(ms / 3600000)) + ":" + 
+           pad(Math.floor(ms / 60000) % 60) + ":" + 
+           pad(Math.floor(ms / 1000) % 60) + "." + 
+           pad(Math.floor(ms % 1000 / 10))
+}
+
+$("swStart").onclick = () => {
+    if (swRun) return
+    swRun = true
+    swStart = performance.now()
+    swInt = setInterval(() => {
+        $("swDisplay").textContent = swFmt(swElapsed + (performance.now() - swStart))
+    }, 40)
+}
+
+$("swPause").onclick = () => {
+    swElapsed += performance.now() - swStart
+    swRun = false
+    clearInterval(swInt)
+}
+
+$("swReset").onclick = () => {
+    swRun = false
+    swElapsed = 0
+    clearInterval(swInt)
+    $("swDisplay").textContent = "00:00:00.00"
+    $("swLaps").innerHTML = ""
+}
+
+$("swLap").onclick = () => {
+    const lapTime = swFmt(swElapsed + (performance.now() - swStart))
+    const lapDiv = document.createElement("div")
+    lapDiv.className = "item"
+    lapDiv.textContent = `Lap ${$("swLaps").children.length + 1}: ${lapTime}`
+    $("swLaps").prepend(lapDiv)
+}
+</script>
+
+</body>
+</html>
